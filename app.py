@@ -289,10 +289,11 @@ def main():
             if activity["type"] in ["run", "active_recovery"]:
                 if not is_completed:
                     if st.button(f"🏃‍♂️ Log {activity['day']} Run", key=f"log_{key}", use_container_width=True):
-                        st.session_state.current_run = activity
-                        st.session_state.current_key = key
-                        st.session_state.show_run_modal = True
-                        st.rerun()
+                        # Store the run info for logging
+                        st.session_state.run_to_log = {
+                            "activity": activity,
+                            "key": key
+                        }
                 else:
                     st.success("Run logged! ✅")
             else:
@@ -323,22 +324,27 @@ def main():
             
             st.divider()
     
-    # Run logging modal
-    if st.session_state.get("show_run_modal", False):
-        st.subheader(f"🏃‍♂️ Log Your Run: {st.session_state.current_run['activity']}")
+    # Run logging section (always visible when a run is selected)
+    if hasattr(st.session_state, 'run_to_log'):
+        st.markdown("---")
+        st.subheader(f"🏃‍♂️ Log Your Run: {st.session_state.run_to_log['activity']['activity']}")
         
         with st.form("run_log_form", clear_on_submit=True):
-            actual_distance = st.text_input("Distance Completed", placeholder="e.g. 2.5K, 3.2K")
-            actual_pace = st.text_input("Average Pace", placeholder="e.g. 7:30/km")
+            col1, col2 = st.columns(2)
             
-            feeling = st.selectbox("How did it feel?", [
-                "Select feeling...",
-                "🔥 Great - Felt strong, could go further",
-                "😊 Good - Comfortable, on target", 
-                "😐 Okay - Got through it",
-                "😤 Tough - Struggled but finished",
-                "😵 Bad - Really difficult"
-            ])
+            with col1:
+                actual_distance = st.text_input("Distance Completed", placeholder="e.g. 2.5K, 3.2K")
+                actual_pace = st.text_input("Average Pace", placeholder="e.g. 7:30/km")
+            
+            with col2:
+                feeling = st.selectbox("How did it feel?", [
+                    "Select feeling...",
+                    "🔥 Great - Felt strong, could go further",
+                    "😊 Good - Comfortable, on target", 
+                    "😐 Okay - Got through it",
+                    "😤 Tough - Struggled but finished",
+                    "😵 Bad - Really difficult"
+                ])
             
             notes = st.text_area("Notes (optional)", height=100)
             
@@ -361,10 +367,10 @@ def main():
                             "notes": notes
                         }
                         
-                        key = st.session_state.current_key
+                        key = st.session_state.run_to_log['key']
                         data["run_data"][key] = run_data_entry
                         data["completed_activities"][key] = True
-                        data["total_xp"] += st.session_state.current_run["xp"]
+                        data["total_xp"] += st.session_state.run_to_log['activity']["xp"]
                         
                         # Auto-adjust future paces
                         if feeling_map[feeling] == "great":
@@ -387,7 +393,8 @@ def main():
                         
                         st.session_state.data = data
                         save_data(data)
-                        st.session_state.show_run_modal = False
+                        # Clear the run to log
+                        delattr(st.session_state, 'run_to_log')
                         st.success("Run logged successfully! 🎉")
                         st.rerun()
                     else:
@@ -395,11 +402,13 @@ def main():
             
             with col2:
                 if st.form_submit_button("❌ Cancel", use_container_width=True):
-                    st.session_state.show_run_modal = False
+                    # Clear the run to log
+                    delattr(st.session_state, 'run_to_log')
                     st.rerun()
     
     # Extra workout modal
     if st.session_state.get("show_extra_workout", False):
+        st.markdown("---")
         st.subheader("➕ Add Extra Workout")
         
         with st.form("extra_workout_form", clear_on_submit=True):
