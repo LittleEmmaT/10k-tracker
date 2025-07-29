@@ -115,7 +115,17 @@ def main():
                 if activity["type"] == "run":
                     st.write("**Run Details:**")
                     st.write(f"• Distance: {activity['distance']}")
-                    st.write(f"• Target Pace: {activity['pace']}")
+                    
+                    # Show adjusted pace if applicable
+                    pace_to_show = activity['pace']
+                    if "pace_adjustments" in data and key in data.get("pace_adjustments", {}):
+                        adjustment = data["pace_adjustments"][key]
+                        if adjustment == "faster":
+                            pace_to_show = f"{activity['pace']} ⚡ (15 sec/km faster - you're crushing it!)"
+                        elif adjustment == "easier":
+                            pace_to_show = f"{activity['pace']} 💙 (15 sec/km easier - smart recovery)"
+                    
+                    st.write(f"• Target Pace: {pace_to_show}")
                     st.write(f"• Structure: {activity['notes']}")
                 elif activity["type"] == "strength":
                     st.write(f"**Focus: {activity['focus']}**")
@@ -155,12 +165,47 @@ def main():
                     data["completed"][key] = True
                     data["total_xp"] += activity["xp"]
                     
+                    # Smart pace adjustments based on how you felt!
+                    if feeling_clean == "great":
+                        st.success(f"🎉 {activity['day']} run logged! +{activity['xp']} XP")
+                        st.info("🚀 **Smart Training:** Since you felt great, your next few runs will have slightly faster target paces to challenge you more!")
+                        
+                        # Store adjustment for future runs
+                        if "pace_adjustments" not in data:
+                            data["pace_adjustments"] = {}
+                        
+                        # Adjust next 3 running days
+                        current_week = data["current_week"]
+                        for week_offset in range(0, 2):  # Next 2 weeks
+                            for day in ["Tue", "Thu", "Sat", "Sun"]:
+                                future_key = f"w{current_week + week_offset}_{day}"
+                                if future_key not in data["completed"]:
+                                    data["pace_adjustments"][future_key] = "faster"
+                    
+                    elif feeling_clean in ["tough", "bad"]:
+                        st.success(f"🎉 {activity['day']} run logged! +{activity['xp']} XP")
+                        st.info("💙 **Smart Training:** You pushed through a tough one! Your next few runs will have easier target paces to help you recover and build back up.")
+                        
+                        # Store adjustment for future runs
+                        if "pace_adjustments" not in data:
+                            data["pace_adjustments"] = {}
+                        
+                        # Adjust next 2 running days to be easier
+                        current_week = data["current_week"]
+                        for week_offset in range(0, 2):
+                            for day in ["Tue", "Thu", "Sun"]:
+                                future_key = f"w{current_week + week_offset}_{day}"
+                                if future_key not in data["completed"]:
+                                    data["pace_adjustments"][future_key] = "easier"
+                    
+                    else:
+                        st.success(f"🎉 {activity['day']} run logged! +{activity['xp']} XP")
+                    
                     # Clear the form inputs
                     for input_key in [distance_key, pace_key, feeling_key, notes_key]:
                         if input_key in st.session_state:
                             del st.session_state[input_key]
                     
-                    st.success(f"🎉 {activity['day']} run logged! +{activity['xp']} XP")
                     st.rerun()
                 else:
                     st.error("Please fill in distance, pace, and feeling!")
