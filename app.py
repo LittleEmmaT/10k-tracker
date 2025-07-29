@@ -53,14 +53,130 @@ def main():
     
     data = st.session_state.data
     
-    # Stats
-    col1, col2, col3 = st.columns(3)
+    # Stats with progress indicators
+    st.subheader("📊 Your Progress Stats")
+    
+    # Calculate stats from logged runs
+    total_distance = 0
+    total_activities = len([k for k, v in data["completed"].items() if v])
+    paces = []
+    distances = []
+    
+    for log in data["run_logs"].values():
+        # Parse distance (remove 'K' and convert to float)
+        try:
+            dist_str = log["distance"].replace("K", "").replace("k", "").strip()
+            dist = float(dist_str)
+            total_distance += dist
+            distances.append(dist)
+        except:
+            pass
+        
+        # Parse pace (convert to seconds for comparison)
+        try:
+            pace_str = log["pace"].replace("/km", "").strip()
+            if ":" in pace_str:
+                mins, secs = pace_str.split(":")
+                total_seconds = int(mins) * 60 + int(secs)
+                paces.append(total_seconds)
+        except:
+            pass
+    
+    # Calculate averages and bests
+    avg_pace_seconds = sum(paces) / len(paces) if paces else 0
+    best_pace_seconds = min(paces) if paces else 0
+    furthest_distance = max(distances) if distances else 0
+    
+    # Convert back to readable format
+    def seconds_to_pace(seconds):
+        if seconds == 0:
+            return "No data"
+        mins = int(seconds // 60)
+        secs = int(seconds % 60)
+        return f"{mins}:{secs:02d}/km"
+    
+    # Display stats in columns
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
     with col1:
         st.metric("Total XP", data["total_xp"])
+    
     with col2:
-        st.metric("Week", f"{data['current_week']}/18")
+        st.metric("Total Distance", f"{total_distance:.1f}K" if total_distance > 0 else "0K")
+    
     with col3:
-        st.metric("Badges", len(data["badges"]))
+        st.metric("Activities Done", total_activities)
+    
+    with col4:
+        st.metric("Average Pace", seconds_to_pace(avg_pace_seconds))
+    
+    with col5:
+        st.metric("Best Pace", seconds_to_pace(best_pace_seconds))
+    
+    # Second row of stats
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric("Current Week", f"{data['current_week']}/18")
+    
+    with col2:
+        st.metric("Furthest Run", f"{furthest_distance:.1f}K" if furthest_distance > 0 else "0K")
+    
+    with col3:
+        st.metric("Badges Earned", len(data["badges"]))
+    
+    with col4:
+        # Calculate this week's distance
+        current_week_distance = 0
+        for activity in PLANS.get(data["current_week"], PLANS[1])["activities"]:
+            if activity["type"] == "run":
+                key = f"w{data['current_week']}_{activity['day']}"
+                if key in data["run_logs"]:
+                    try:
+                        dist_str = data["run_logs"][key]["distance"].replace("K", "").replace("k", "").strip()
+                        current_week_distance += float(dist_str)
+                    except:
+                        pass
+        st.metric("This Week", f"{current_week_distance:.1f}K")
+    
+    with col5:
+        # Show improvement indicator
+        if data["current_week"] > 1 and len(data["run_logs"]) >= 2:
+            # Get recent runs to compare
+            recent_paces = []
+            older_paces = []
+            
+            for key, log in data["run_logs"].items():
+                week_num = int(key.split("_")[0].replace("w", ""))
+                try:
+                    pace_str = log["pace"].replace("/km", "").strip()
+                    if ":" in pace_str:
+                        mins, secs = pace_str.split(":")
+                        total_seconds = int(mins) * 60 + int(secs)
+                        
+                        if week_num >= data["current_week"] - 1:  # Recent weeks
+                            recent_paces.append(total_seconds)
+                        else:  # Older weeks
+                            older_paces.append(total_seconds)
+                except:
+                    pass
+            
+            if recent_paces and older_paces:
+                recent_avg = sum(recent_paces) / len(recent_paces)
+                older_avg = sum(older_paces) / len(older_paces)
+                
+                if recent_avg < older_avg:  # Faster is better (lower seconds)
+                    improvement = older_avg - recent_avg
+                    st.metric("Pace Trend", "📈 Improving!", f"-{improvement:.0f}s")
+                elif recent_avg > older_avg:
+                    decline = recent_avg - older_avg
+                    st.metric("Pace Trend", "🔄 Building", f"+{decline:.0f}s")
+                else:
+                    st.metric("Pace Trend", "✨ Steady", "0s")
+            else:
+                st.metric("Pace Trend", "🏃‍♂️ Starting", "")
+        else:
+            st.metric("Pace Trend", "🚀 Building", "")
     
     # Week navigation
     col1, col2, col3 = st.columns([1, 2, 1])
